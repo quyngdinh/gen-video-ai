@@ -1,0 +1,17 @@
+{
+  "name": "gen-video-ai",
+  "version": "0.1.0",
+  "description": "Web app chạy localhost: kịch bản + ảnh asset -> voice-over (genmax.io) + SRT -> video 16:9 / 9:16. Không cần cài thư viện npm.",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "mock": "node test/mock-genmax.js",
+    "test": "node test/e2e.js",
+    "test:music": "node test/music-e2e.js"
+  },
+  "engines": {
+    "node": ">=20.3"
+  },
+  "license": "UNLICENSED"
+}

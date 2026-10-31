@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# dữ liệu người dùng: settings, cache AI, video, nhạc, project
+data/
+
+# API key / bí mật — chỉ commit .env.example
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# hệ điều hành / editor
+.DS_Store
+.vscode/
+.idea/
+*.log
