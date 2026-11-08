@@ -57,9 +57,9 @@ const server = http.createServer((req, res) => {
           calls.musicArrange = (calls.musicArrange || 0) + 1;
           const nl = Number(/Lời có (\d+) câu/.exec(text)?.[1]);
           const nc = Number(/Có (\d+) clip/.exec(text)?.[1]);
-          // câu i -> clip (i mod nc)+1, clip phụ là clip kế tiếp; chừa clip cuối không dùng nếu có ≥ 3 clip
+          // câu i -> clip (i mod nc)+1; chừa clip cuối không dùng nếu có ≥ 3 clip
           const use = nc >= 3 ? nc - 1 : nc;
-          const lines = [...Array(nl)].map((_, i) => ({ clip: (i % use) + 1, alts: use > 1 ? [((i + 1) % use) + 1] : [] }));
+          const lines = [...Array(nl)].map((_, i) => ({ clip: (i % use) + 1 }));
           return json(200, { model: b.model, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ intro: use, lines, unused: nc >= 3 ? [nc] : [], notes: 'Xếp theo lời' }) }] });
         }
         if (parts[0]?.type !== 'image') {

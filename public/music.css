@@ -1,4 +1,6 @@
 /* trang Video nhạc (music.js) */
+/* font đi kèm app (public/fonts) — cũng dùng khi đốt phụ đề */
+@font-face { font-family: 'Patrick Hand'; src: url('fonts/PatrickHand-Regular.ttf') format('truetype'); font-display: swap; }
 .fxchips { display: flex; flex-wrap: wrap; gap: 6px; }
 .fxchips button { background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
 .fxchips button.on { border-color: var(--accent); background: rgba(229, 25, 122, 0.16); }
@@ -15,7 +17,7 @@
 .mtools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .mtools .sp1 { flex: 1; }
 .mrows { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; max-height: 560px; overflow: auto; padding-right: 4px; }
-.mrow { display: grid; grid-template-columns: 28px 30px 82px 1fr 150px minmax(64px, auto) 28px; gap: 8px; align-items: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 5px 6px; }
+.mrow { display: grid; grid-template-columns: 28px 30px 82px 1fr 150px 28px; gap: 8px; align-items: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 5px 6px; }
 .mrow.cur { border-color: var(--ok); background: rgba(45, 212, 160, 0.08); }
 .mrow.next { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(229, 25, 122, 0.25); }
 .mrow .mn { color: var(--muted); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -53,18 +55,10 @@
 .aibox .aimodel:empty { display: none; }
 .mrow.mintro { background: transparent; border-style: dashed; margin-top: 10px; }
 .mrow .muted { color: var(--muted); font-size: 13px; }
-.mrow .malts { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-.mrow .alt { position: relative; padding: 0; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; width: 34px; height: 22px; background: #000; cursor: pointer; }
-.mrow .alt img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.85; }
-.mrow .alt b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; text-shadow: 0 0 3px #000; }
-.mrow .alt:hover { border-color: var(--accent); }
-.mrow .madd { width: 30px; height: 22px; padding: 0; font-size: 13px; border: 1px dashed var(--line); border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; }
-.mrow .madd:hover { border-color: var(--accent); color: var(--text); }
 
 @media (max-width: 760px) {
   .mrow { grid-template-columns: 24px 28px 74px 1fr 28px; }
   .mrow .mimg { grid-column: 3 / 5; }
-  .mrow .malts { grid-column: 5 / 6; }
 }
 
 .mempty { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 12px; }
@@ -93,13 +87,6 @@
 .mclip .pick input { accent-color: var(--accent); width: 14px; height: 14px; margin: 0; cursor: pointer; }
 .mclip .pick .idx { position: static; background: none; padding: 0; }
 .mclip.sel { outline: 2px solid var(--err); }
-.modal .dlg.cviewdlg { width: min(900px, 100%); }
-.cviewdlg .dh small { color: var(--muted); font-weight: 400; }
-.cviewdlg .cvstage { background: #000; border-radius: 10px; overflow: hidden; display: flex; justify-content: center; }
-.cviewdlg .cvstage video, .cviewdlg .cvstage img { max-width: 100%; max-height: 62vh; display: block; }
-.cviewdlg .cvmeta { display: flex; gap: 10px; align-items: baseline; min-width: 0; }
-.cviewdlg .cvmeta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cviewdlg .cvmeta small { color: var(--muted); flex: none; }
 .modal .dlg.cpickdlg { width: min(1100px, 100%); max-height: 92vh; }
 .cpickdlg .cpview { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr); gap: 14px; align-items: start; }
 .cpickdlg .cvstage { aspect-ratio: 16 / 9; align-items: center; }
@@ -140,3 +127,4 @@
 
 .toast .btn { margin-top: 8px; }
 
+#mIntroTitle.invalid { border-color: var(--warn); }

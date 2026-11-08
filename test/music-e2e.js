@@ -84,7 +84,10 @@ function probe(file) {
     ok((await fetch(`${BASE}/mfiles/${legacy}/clips/img_old1.png`)).status === 200, 'Ảnh cũ vẫn tải được');
 
     console.log('\nTải bài hát + clip');
-    ok((await fetch(`${BASE}/api/music`, { method: 'POST' })).status === 400, 'Tạo dự án bắt buộc có tên');
+    const draft = await api('POST', '/api/music', { name: '' });
+    ok(draft.name === '' && draft.title === '' && !draft.song && !draft.clips.length && !draft.lines.length, `Tạo dự án nháp chưa có tên, dữ liệu trống (${draft.id})`);
+    ok((await fetch(`${BASE}/api/music/${draft.id}/run`, { method: 'POST', body: '{}' })).status === 400, 'Dự án nháp chưa có tên thì không dựng được');
+    await api('DELETE', `/api/music/${draft.id}`);
     let p = await api('POST', '/api/music', { name: 'Con cò bé bé' });
     ok(p.id === 'con-co-be-be' && p.name === 'Con cò bé bé' && fs.existsSync(path.join(data, 'music', 'con-co-be-be', 'project.json')), `Thư mục dự án theo tên dự án (${p.id})`);
     ok((await api('POST', '/api/music', { name: 'Con cò bé bé' })).id === 'con-co-be-be-2', 'Trùng tên dự án thì đánh số thư mục');
@@ -114,7 +117,7 @@ function probe(file) {
     const calls1 = await (await fetch(aiBase + '/calls')).json();
     ok(again.cached && calls1.musicClip === 4, `AI xem mỗi clip 1 lần, lần sau lấy bộ nhớ (gọi ${calls1.musicClip} lần)`);
     p = await api('POST', `/api/music/${p.id}/ai/arrange`, {});
-    ok(p.lines.every((l) => p.clips.includes(l.clip)) && p.lines[0].alts.length === 1 && p.introClip === files[2], 'AI gán clip chính + clip phụ cho từng câu, chọn clip nhạc dạo');
+    ok(p.lines.every((l) => p.clips.includes(l.clip) && !('alts' in l)) && p.introClip === files[2], 'AI gán một clip cho từng câu, chọn clip nhạc dạo');
     ok(p.arrange?.unused?.[0] === files[3] && p.arrange.notes, 'Ghi lại clip không dùng + ghi chú của AI');
     ok(p.clipInfo[files[1]].desc && p.clipInfo[files[1]].energy >= 1, 'Lưu mô tả + mức sôi động của clip');
 
@@ -204,6 +207,11 @@ function probe(file) {
       ok((await fetch(`${BASE}/api/music/${p.id}/run`, { method: 'POST', body: '{}' })).status === 400, 'Chưa có tên video thì không cho dựng');
       await api('PUT', `/api/music/${p.id}`, { title: t });
     }
+    {
+      const noTitle = await fetch(`${BASE}/api/music/${p.id}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      ok(noTitle.status === 400 && /tên bài/i.test((await noTitle.json()).error), 'Chưa nhập tên bài lúc nhạc dạo -> không cho dựng');
+    }
+    await api('PUT', `/api/music/${p.id}`, { introTitle: '  Bài   Con Cò  ' });
     await api('PUT', `/api/music/${p.id}`, { name: 'Bé học hát' });
     ok(fs.existsSync(path.join(data, 'music', 'con-co-be-be')), 'Sửa tên dự án chưa đổi thư mục ngay');
     p = await api('POST', `/api/music/${p.id}/run`, {});
@@ -247,6 +255,7 @@ function probe(file) {
       ok(cueT >= 2, `SRT dời sau intro (câu đầu ${cueT.toFixed(2)}s)`);
       ok(/Nối video intro "Intro kênh.mp4" \(2\.0s\)/.test(p.logs.map((l) => l.msg).join('\n')), 'Nhật ký: có nối intro');
       ok(/Nối video outro "Outro kênh.mp4" \(1\.5s\) vào cuối/.test(p.logs.map((l) => l.msg).join('\n')), 'Nhật ký: có nối outro');
+      ok(/Hiện tên bài "Bài Con Cò" lúc nhạc dạo/.test(p.logs.map((l) => l.msg).join('\n')), 'Tên bài lúc nhạc dạo = tên đã nhập');
       ok(/Gắn logo "Logo kênh.jpg" ở góc trên phải/.test(p.logs.map((l) => l.msg).join('\n')), 'Nhật ký: có gắn logo');
     }
     const logs = p.logs.map((l) => l.msg).join('\n');
@@ -260,13 +269,13 @@ function probe(file) {
     const shots = Music.planShots(pj, Music.timeLines(pj.lines, 20), 20);
     const offBeat = shots.slice(1).filter((sh) => !pj.beats.beats.some((b) => Math.abs(b - sh.start) < 0.001));
     ok(shots.length >= 6 && !offBeat.length, `${shots.length} cảnh, mọi điểm cắt nằm đúng phách`);
-    ok(shots.every((sh) => sh.end - sh.start <= 3 + 0.8 + 0.01 || pj.clipInfo[sh.file].kind === 'video'), 'Không cảnh nào dài quá "tối đa mỗi cảnh" (+ phần dư < 0.8s được gộp vào)');
-    ok(shots.every((sh, i) => !i || sh.file !== shots[i - 1].file), 'Hai cảnh liền nhau không dùng cùng một clip (khi có clip phụ)');
+    const allowed = new Set([pj.introClip, pj.outroClip, ...pj.lines.map((l) => l.clip)].filter(Boolean));
+    ok(shots.every((sh) => allowed.has(sh.file)), 'Mỗi cảnh chỉ dùng clip của câu / nhạc dạo (không còn clip phụ)');
     ok(shots.some((sh) => sh.from > 0), 'Clip dùng lại chạy tiếp đoạn sau, không lặp đoạn đầu');
 
     console.log('\nXoá + bảo mật');
     p = await api('DELETE', `/api/music/${p.id}/clips/${files[1]}`);
-    ok(!p.clips.includes(files[1]) && !p.lines.some((l) => l.clip === files[1] || l.alts.includes(files[1])), 'Xoá clip: bỏ khỏi mọi câu');
+    ok(!p.clips.includes(files[1]) && !p.lines.some((l) => l.clip === files[1]), 'Xoá clip: bỏ khỏi mọi câu');
     ok((await fetch(`${BASE}/mfiles/${p.id}/project.json`)).status === 404, 'Không đọc được file ngoài danh sách');
     ok((await fetch(`${BASE}/mfiles/${p.id}/clips/../project.json`)).status === 404, 'Chặn đường dẫn ../');
     const old2 = await api('GET', '/api/projects');
@@ -275,7 +284,7 @@ function probe(file) {
     ok(Array.isArray(old2) && old2.length === 0, 'API dự án video thường tách riêng (trang Dự án gộp ở giao diện)');
     const many = p.clips.slice(0, 2);
     p = await api('POST', `/api/music/${p.id}/clips/delete`, { files: [...many, 'khong_co.mp4'] });
-    ok(p.clips.length === 1 && !many.some((f) => p.clips.includes(f) || p.lines.some((l) => l.clip === f || l.alts.includes(f)) || p.introClip === f), 'Xoá nhiều clip một lần: bỏ khỏi mọi câu, bỏ qua tên lạ');
+    ok(p.clips.length === 1 && !many.some((f) => p.clips.includes(f) || p.lines.some((l) => l.clip === f) || p.introClip === f), 'Xoá nhiều clip một lần: bỏ khỏi mọi câu, bỏ qua tên lạ');
     ok(many.every((f) => !fs.existsSync(path.join(data, 'music', p.id, 'clips', f))), 'Xoá nhiều clip: file trên máy cũng bị xoá');
     ok(await api('POST', `/api/music/${p.id}/clips/delete`, { files: [] }).then(() => false, (e) => /400/.test(e.message)), 'Xoá nhiều mà không chọn clip nào -> 400');
   } catch (e) {
