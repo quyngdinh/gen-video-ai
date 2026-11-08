@@ -57,18 +57,18 @@ Menu **Video nhạc** dựng video ca nhạc từ **bài hát có sẵn** (đã 
    - **🎯 Chấm tay**: bấm **Space** đúng lúc giọng hát bắt đầu mỗi câu. **K** đánh dấu hết câu, **←** chấm lại câu trước, **Esc** dừng.
    - **−0.1s / +0.1s**: dời cả bài khi lời hiện sớm hoặc muộn đều so với giọng hát.
    - Thử với bài 40 giây: AI chép đúng 7/7 câu, thời gian lệch trung bình khoảng 0,2–0,3 giây.
-   - **🤖 AI tự xếp clip theo nhạc**: AI xem 3 khung hình (đầu / giữa / cuối) của từng clip, ghi mô tả, từ khoá và mức sôi động 1–5. Sau đó AI chọn cho mỗi câu một **clip chính** và vài **clip phụ**, theo các tiêu chí:
+   - **🤖 AI tự xếp clip theo nhạc**: AI xem 3 khung hình (đầu / giữa / cuối) của từng clip, ghi mô tả, từ khoá và mức sôi động 1–5. Sau đó AI chọn cho mỗi câu một clip, theo các tiêu chí:
      - khớp lời;
      - điệp khúc dùng lại đúng clip của lần đầu;
      - đoạn sôi động dùng clip sôi động;
      - có thêm một clip riêng cho đoạn nhạc dạo.
 
      Mô tả clip được nhớ lại, lần sau không tốn tiền.
-   - **🎞 Tự xếp** (không AI): chia đều clip, điệp khúc dùng lại clip. Có thể sửa tay clip chính / clip phụ / clip nhạc dạo.
+   - **🎞 Tự xếp** (không AI): chia đều clip, điệp khúc dùng lại clip. Có thể sửa tay clip của từng câu / clip nhạc dạo.
 5. Hình & chữ:
    - Cách đặt clip vào khung.
    - **Cắt đúng nhịp**.
-   - **Mỗi cảnh dài tối đa**: câu dài hơn thì chuyển sang clip phụ, điểm chuyển rơi đúng phách.
+   - **Mỗi cảnh dài tối đa**: đoạn nhạc dạo dài hơn thì đổi clip, điểm chuyển rơi đúng phách.
    - Lời **karaoke** với 10 bộ màu và 10 font sinh động có đủ dấu tiếng Việt (chọn font thì màu chữ tự đổi theo font, vẫn chỉnh lại được), tên bài hiện lúc nhạc dạo.
 6. **🎬 Dựng video nhạc** → tải MP4, kèm `lyrics.srt` / `lyrics.lrc`.
 
@@ -76,7 +76,7 @@ Video nhạc cũng hiện ở trang **Dự án** (nhãn 🎵 Video nhạc), có 
 
 Cách cắt cảnh:
 - Clip đổi ở đầu mỗi câu hát, được kéo về phách gần nhất.
-- Clip ngắn hơn câu thì nối sang clip phụ. Hai cảnh liền nhau không dùng cùng một clip khi còn clip khác.
+- Mỗi câu chỉ dùng một clip; clip ngắn hơn câu thì chạy lại từ đầu.
 - Một clip dùng lại nhiều lần sẽ chạy tiếp đoạn sau của nó. Nếu clip hết giữa chừng thì giữ khung hình cuối.
 
 Hiệu ứng và chữ karaoke vẽ bằng phụ đề ASS ở bước ghép cuối, nên hầu như không làm chậm việc dựng.

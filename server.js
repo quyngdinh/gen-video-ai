@@ -38,6 +38,7 @@ const MIME = {
   '.ogg': 'audio/ogg',
   '.flac': 'audio/flac',
   '.mp4': 'video/mp4',
+  '.ttf': 'font/ttf',
   '.m4v': 'video/mp4',
   '.mov': 'video/quicktime',
   '.webm': 'video/webm',

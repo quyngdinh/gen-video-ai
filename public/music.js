@@ -121,14 +121,11 @@
 
   const STATUS = { idle: 'Chưa dựng', queued: 'Đang chờ', running: 'Đang dựng', done: 'Hoàn tất', error: 'Lỗi', canceled: 'Đã huỷ' };
   const CUR_KEY = 'gva.music.current';
+  const DRAFT = 'Nháp (chưa đặt tên)';
   const fontList = (cur) => (meta.fonts.some((f) => f.name === cur) ? meta.fonts : [{ name: cur, label: cur, preset: 'classic' }, ...meta.fonts]);
 
   let meta = null; // { effects, presets }
   let P = null; // dự án nhạc đang mở (từ server)
-  let naming = false; // đang hiện ô đặt tên dự án mới
-  let newName = ''; // chữ đang gõ trong ô tên dự án mới (giữ lại khi trang vẽ lại)
-  // gõ tiếng Việt (Telex/VNI) đang ghép dấu: Enter lúc này chỉ để chốt chữ, không phải lệnh
-  const composing = (e) => e.isComposing || e.keyCode === 229;
   let sel = new Set(); // clip đang chọn để xoá nhiều
   let selFor = null; // id dự án của sel
   let pollT = null;
@@ -153,12 +150,14 @@
       title: P.title,
       lyricsRaw: P.lyricsRaw,
       sectionLyrics: P.sectionLyrics || '',
+      introTitle: P.introTitle || '',
       sections: P.sections?.items,
       options: P.options,
       clips: P.clips,
       clipFx: P.clipFx,
       introClip: P.introClip,
-      lines: P.lines.map((l) => ({ text: l.text, start: l.start, end: l.end, clip: l.clip, alts: l.alts || [] })),
+      outroClip: P.outroClip,
+      lines: P.lines.map((l) => ({ text: l.text, start: l.start, end: l.end, clip: l.clip })),
     };
   }
   function save(now) {
@@ -184,30 +183,17 @@
 
   async function openProject(id) {
     P = await api('GET', `/api/music/${id}`);
-    naming = false;
     remember(P.id);
     draw();
   }
-  /** "+ Video nhạc mới": hiện ô đặt tên dự án ở trên cùng; tên dự án = tên thư mục (con-co-be-be). */
+  /** "+ Video nhạc mới": tạo ngay dự án nháp trống (chưa có tên), mở ra để nhập tên + dữ liệu. */
   async function newProject() {
     if (P) await save(true);
-    naming = true;
-    newName = '';
-    draw();
-    $('#mNewName')?.focus();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-  async function createProject() {
-    const name = $('#mNewName').value.trim();
-    if (!name) {
-      toast('Hãy đặt tên dự án.', 'err');
-      return $('#mNewName').focus();
-    }
-    P = await api('POST', '/api/music', { name });
-    naming = false;
-    newName = '';
+    P = await api('POST', '/api/music', { name: '' });
     remember(P.id);
     draw();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('#mName')?.focus();
   }
   const slugify = (s) =>
     String(s || '')
@@ -234,9 +220,9 @@
       P = id ? await api('GET', `/api/music/${id}`).catch(() => null) : null;
       if (!P) {
         const list = await api('GET', '/api/music');
-        P = list.length ? await api('GET', `/api/music/${list[0].id}`) : null;
-        if (P) remember(P.id);
-        else naming = true; // chưa có dự án nào: đặt tên dự án đầu tiên
+        // chưa có dự án nào: tạo sẵn một dự án nháp
+        P = list.length ? await api('GET', `/api/music/${list[0].id}`) : await api('POST', '/api/music', { name: '' });
+        remember(P.id);
       }
     } catch (e) {
       app.innerHTML = `<div class="err">${esc(e.message)}</div>`;
@@ -260,41 +246,15 @@
         ? `Thư mục dự án: <code>data/music/${esc(P.id)}</code>`
         : `Thư mục hiện tại: <code>data/music/${esc(P.id)}</code> → khi bấm <b>Dựng video nhạc</b> sẽ đổi thành <code>${esc(want)}</code>`;
   }
-  function newBox() {
-    return `<section class="card" id="mNewBox"><h2>📁 Tên dự án mới <small style="color:var(--warn)">bắt buộc</small></h2>
-        <p class="hint" style="margin-top:0">Thư mục dự án (chứa bài hát, clip, video đã dựng) sẽ đặt theo tên này, ví dụ: <b>Con cò bé bé</b> → <code>con-co-be-be</code>.</p>
-        <div class="inline"><input type="text" id="mNewName" maxlength="120" placeholder="Ví dụ: Con cò bé bé" style="flex:1" value="${esc(newName)}"><button class="btn primary" id="mCreate" type="button">Tạo dự án</button>${P ? '<button class="btn ghost" id="mNewCancel" type="button">Huỷ</button>' : ''}</div>
-        <p class="hint" id="mNewSlug"></p>
-      </section>`;
-  }
-  function bindNew() {
-    const inp = $('#mNewName');
-    if (!inp) return;
-    const show = () => ($('#mNewSlug').innerHTML = inp.value.trim() ? `Thư mục: <code>${esc(slugify(inp.value))}</code>` : '');
-    show();
-    inp.oninput = () => ((newName = inp.value), show());
-    inp.onkeydown = (e) => e.key === 'Enter' && !composing(e) && createProject().catch((err) => toast(err.message, 'err'));
-    $('#mCreate').onclick = () => createProject().catch((err) => toast(err.message, 'err'));
-    if ($('#mNewCancel')) $('#mNewCancel').onclick = () => ((naming = false), (newName = ''), draw());
-  }
-
   function draw() {
     if (!active()) return;
-    const typing = document.activeElement?.id === 'mNewName';
     stopTap();
-    if (!P) {
-      $('#app').innerHTML = `<div class="page-head"><h1>🎵 Video nhạc thiếu nhi</h1></div>${newBox()}`;
-      bindNew();
-      return $('#mNewName').focus();
-    }
-    queueMicrotask(() => typing && $('#mNewName')?.focus());
     const o = P.options;
     const c = o.captions;
     const app = $('#app');
     app.innerHTML = `
       <div class="page-head"><h1>🎵 Video nhạc thiếu nhi</h1>
         <div class="inline"><select id="mList" title="Mở video nhạc khác"></select><button class="btn" id="mNew" type="button">+ Video nhạc mới</button></div></div>
-${naming ? newBox() : ''}
       <section class="card"><div class="field" style="margin-top:0"><label>Tên dự án <small style="color:var(--warn)">bắt buộc</small></label>
         <input type="text" id="mName" maxlength="120" placeholder="Ví dụ: Con cò bé bé" value="${esc(P.name || '')}"></div>
         <p class="hint" id="mDir"></p></section>
@@ -342,6 +302,7 @@ ${BUMPERS.map(([k, n, where]) => `
         <div class="maudio">
           <label class="check"><span class="switch"><input type="checkbox" id="mMute" ${o.muteClips ? 'checked' : ''}><span></span></span> 🔇 Tắt âm thanh tất cả clip <small id="mAudCount"></small></label>
           <div class="rng" id="mClipVolBox" ${o.muteClips ? 'hidden' : ''}><span class="lbl">Âm lượng tiếng clip</span><input type="range" id="mClipVol" min="0" max="1.5" step="0.05" value="${o.clipVolume}"><output>${Math.round(o.clipVolume * 100)}%</output></div>
+          <label class="check"><span class="switch"><input type="checkbox" id="mDelogo" ${o.removeWatermark ? 'checked' : ''}><span></span></span> ✨ Xoá logo Gemini ở góc dưới phải clip</label>
         </div>
         <div class="fxbar" id="mClipSel" hidden></div>
         <div class="thumbs mclips" id="mThumbs"></div>
@@ -362,7 +323,9 @@ ${BUMPERS.map(([k, n, where]) => `
           <div class="field" id="mBgField" ${o.fit === 'color' ? '' : 'hidden'}><label>Màu nền</label><input type="color" id="mBg" value="${esc(o.bgColor)}"></div></div>
         <div class="row"><div class="field"><label>Cắt cảnh</label><label class="check"><input type="checkbox" id="mBeat" ${o.cutOnBeat ? 'checked' : ''}> Cắt đúng nhịp bài hát${P.beats?.bpm ? ` <small>(~${Math.round(P.beats.bpm)} BPM)</small>` : ''}</label></div>
           <div class="field"><label>Chuyển cảnh</label>${seg('transition', [['none', 'Cắt thẳng'], ['fade', 'Mờ dần']], o.transition)}</div></div>
-        <div class="field"><label>Mỗi cảnh dài tối đa (câu dài hơn thì chuyển sang clip phụ)</label><div class="rng"><input type="range" id="mMaxShot" min="1.5" max="20" step="0.5" value="${o.maxShot}"><output>${o.maxShot}s</output></div></div>
+        <div class="field"><label>Mỗi cảnh dài tối đa (dài hơn thì đổi clip)</label><div class="rng"><input type="range" id="mMaxShot" min="1.5" max="20" step="0.5" value="${o.maxShot}"><output>${o.maxShot}s</output></div></div>
+        <div class="field" style="margin-top:18px"><label for="mIntroTitle">Tên bài hiện lúc nhạc dạo <small style="color:var(--warn)">bắt buộc</small></label>
+          <input type="text" id="mIntroTitle" maxlength="120" placeholder="Ví dụ: Con cò bé bé" value="${esc(P.introTitle || '')}"><p class="hint" id="mIntroTitleHint"></p></div>
         <div class="row" style="margin-top:18px">
           <label class="check"><span class="switch"><input type="checkbox" id="mCapOn" ${c.on ? 'checked' : ''}><span></span></span> Hiện lời bài hát</label>
           <label class="check"><span class="switch"><input type="checkbox" id="mKara" ${c.karaoke ? 'checked' : ''}><span></span></span> Karaoke (tô màu chữ theo giọng hát)</label>
@@ -388,7 +351,6 @@ ${BUMPERS.map(([k, n, where]) => `
       </div></div>`;
 
     bind();
-    bindNew();
     drawList();
     for (const [k] of BUMPERS) drawBumper(k, true);
     drawLogo(true);
@@ -435,7 +397,13 @@ ${BUMPERS.map(([k, n, where]) => `
     $('#mTitle').oninput = (e) => ((P.title = e.target.value), titleFile(), save());
     // chỉ lưu tên; thư mục được đổi theo tên dự án khi bấm "Dựng video nhạc"
     drawDir();
-    $('#mName').oninput = (e) => ((P.name = e.target.value), drawDir(), save());
+    $('#mName').oninput = (e) => {
+      P.name = e.target.value;
+      drawDir();
+      const opt = $(`#mList option[value="${P.id}"]`);
+      if (opt) opt.textContent = P.name.trim() || DRAFT;
+      save();
+    };
     $('#mSecLyrics').oninput = (e) => ((P.sectionLyrics = e.target.value), save());
     $$('[data-ori]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -469,6 +437,13 @@ ${BUMPERS.map(([k, n, where]) => `
     });
     $('#mBg').oninput = (e) => ((P.options.bgColor = e.target.value), save());
     $('#mNorm').onchange = (e) => ((P.options.normalizeAudio = e.target.checked), save());
+    const introTitleHint = () => {
+      const has = !!P.introTitle?.trim();
+      $('#mIntroTitle').classList.toggle('invalid', !has);
+      $('#mIntroTitleHint').innerHTML = has ? 'Hiện giữa màn hình 3 giây đầu bài hát (sau video intro).' : '<span style="color:var(--warn)">Chưa nhập tên bài — bắt buộc trước khi dựng video.</span>';
+    };
+    introTitleHint();
+    $('#mIntroTitle').oninput = (e) => ((P.introTitle = e.target.value), introTitleHint(), save());
     $('#mIntro').onchange = (e) => ((P.options.titleIntro = e.target.checked), save());
     $('#mBeat').onchange = (e) => ((P.options.cutOnBeat = e.target.checked), save());
     $('#mMute').onchange = (e) => {
@@ -477,6 +452,7 @@ ${BUMPERS.map(([k, n, where]) => `
       drawThumbs();
       save();
     };
+    $('#mDelogo').onchange = (e) => ((P.options.removeWatermark = e.target.checked), save());
     $('#mCapOn').onchange = (e) => {
       P.options.captions.on = e.target.checked;
       $('#mCapOpts').classList.toggle('dim', !e.target.checked);
@@ -851,6 +827,7 @@ ${BUMPERS.map(([k, n, where]) => `
       const r = await api('POST', '/api/music/assign', { lines: P.lines, clips: P.clips, every, reuseRepeats: true });
       P.lines = r.lines;
       P.introClip = null;
+      P.outroClip = null;
       P.arrange = null;
       if (!quiet) {
         drawLines();
@@ -888,7 +865,7 @@ ${BUMPERS.map(([k, n, where]) => `
       }
       setMsg('🤖 AI đang chọn clip cho từng câu hát…');
       const r = await serial(() => api('POST', `/api/music/${P.id}/ai/arrange`, { data: payload() }, { signal: ai.ac.signal }));
-      Object.assign(P, { lines: r.lines, introClip: r.introClip, arrange: r.arrange, clipInfo: r.clipInfo, updatedAt: r.updatedAt });
+      Object.assign(P, { lines: r.lines, introClip: r.introClip, outroClip: r.outroClip, arrange: r.arrange, clipInfo: r.clipInfo, updatedAt: r.updatedAt });
       toast('AI đã xếp clip theo bài hát', 'ok');
     } catch (e) {
       if (ai.ac.signal.aborted) toast('Đã dừng AI');
@@ -914,7 +891,7 @@ ${BUMPERS.map(([k, n, where]) => `
       clearTimeout(saveT);
       await save(true);
       const r = await serial(() => api('POST', `/api/music/${P.id}/ai/transcribe`, { data: payload() }, { signal: ai.ac.signal }));
-      Object.assign(P, { lines: r.lines, lyricsRaw: r.lyricsRaw, align: r.align, introClip: r.introClip, arrange: r.arrange, title: r.title, updatedAt: r.updatedAt });
+      Object.assign(P, { lines: r.lines, lyricsRaw: r.lyricsRaw, align: r.align, introClip: r.introClip, outroClip: r.outroClip, arrange: r.arrange, title: r.title, updatedAt: r.updatedAt });
       if ($('#mTitle')) $('#mTitle').value = P.title;
       toast(`AI đã chép ${r.lines.length} câu hát kèm thời gian. Kiểm tra chữ trong bảng ở mục 7, bấm ▶ để nghe thử.`, 'ok');
       warnLyricFixes();
@@ -930,7 +907,7 @@ ${BUMPERS.map(([k, n, where]) => `
 
   /** Thêm một câu trống cuối bảng (AI bỏ sót câu). */
   function addLine() {
-    P.lines.push({ text: 'Câu mới', start: null, end: null, clip: P.lines[P.lines.length - 1]?.clip || null, alts: [] });
+    P.lines.push({ text: 'Câu mới', start: null, end: null, clip: P.lines[P.lines.length - 1]?.clip || null });
     drawLines();
     save();
     const inp = $$('.mrow[data-i] .mtx').pop();
@@ -1024,11 +1001,12 @@ ${BUMPERS.map(([k, n, where]) => `
   const clipUrl = (f) => `${base()}/clips/${f}`;
   const thumbUrl = (f) => (P.clipInfo[f]?.kind === 'image' ? clipUrl(f) : `${base()}/thumbs/thumb_${f.replace(/\.[^.]+$/, '')}.jpg`);
   const clipNo = (f) => P.clips.indexOf(f) + 1;
+  const pickBtn = (cur, empty, id = '') => `<button type="button" class="mpick" ${id ? `id="${id}"` : ''} title="Bấm để xem và chọn clip">${cur ? `<img src="${esc(thumbUrl(cur))}">` : '<i></i>'}<span>${cur ? `Clip ${clipNo(cur)}` : empty}</span><b>▾</b></button>`;
 
   function drawThumbs() {
     const box = $('#mThumbs');
     if (!box) return;
-    const used = new Set([P.introClip, ...P.lines.flatMap((l) => [l.clip, ...(l.alts || [])])].filter(Boolean));
+    const used = new Set([P.introClip, P.outroClip, ...P.lines.map((l) => l.clip)].filter(Boolean));
     if (selFor !== P.id) (sel = new Set()), (selFor = P.id);
     sel = new Set([...sel].filter((f) => P.clips.includes(f)));
     box.innerHTML = P.clips
@@ -1071,7 +1049,7 @@ ${BUMPERS.map(([k, n, where]) => `
           if (!confirm(`Xoá clip ${clipNo(f)}?`)) return;
           try {
             const r = await api('DELETE', `/api/music/${P.id}/clips/${encodeURIComponent(f)}`);
-            Object.assign(P, { clips: r.clips, clipNames: r.clipNames, clipInfo: r.clipInfo, clipFx: r.clipFx, lines: r.lines, introClip: r.introClip });
+            Object.assign(P, { clips: r.clips, clipNames: r.clipNames, clipInfo: r.clipInfo, clipFx: r.clipFx, lines: r.lines, introClip: r.introClip, outroClip: r.outroClip });
           } catch (e) {
             toast(e.message, 'err');
           }
@@ -1125,7 +1103,7 @@ ${BUMPERS.map(([k, n, where]) => `
         if (!files.length || !confirm(`Xoá ${files.length} clip đã chọn (${files.map((f) => clipNo(f)).join(', ')})? Không hoàn tác được.`)) return;
         try {
           const r = await api('POST', `/api/music/${P.id}/clips/delete`, { files });
-          Object.assign(P, { clips: r.clips, clipNames: r.clipNames, clipInfo: r.clipInfo, clipFx: r.clipFx, lines: r.lines, introClip: r.introClip });
+          Object.assign(P, { clips: r.clips, clipNames: r.clipNames, clipInfo: r.clipInfo, clipFx: r.clipFx, lines: r.lines, introClip: r.introClip, outroClip: r.outroClip });
           sel = new Set();
           toast(`Đã xoá ${files.length} clip`, 'ok');
         } catch (e) {
@@ -1151,33 +1129,6 @@ ${BUMPERS.map(([k, n, where]) => `
         save();
       }),
     );
-  }
-
-  /** Popup xem lại một clip. o: { label, text, remove() — có thì hiện nút "Bỏ clip phụ" }. */
-  function viewClip(f, o = {}) {
-    if (!f || !P.clips.includes(f)) return;
-    const m = $('#modal');
-    const inf = P.clipInfo[f] || {};
-    const close = () => {
-      m.hidden = true;
-      m.innerHTML = '';
-      m.onclick = null;
-      document.removeEventListener('keydown', onKey);
-    };
-    const onKey = (e) => e.key === 'Escape' && close();
-    m.innerHTML = `<div class="dlg cviewdlg"><div class="dh"><h3>Clip ${clipNo(f)}${o.label ? ` <small>· ${esc(o.label)}</small>` : ''}</h3><button class="vx" id="cvClose" type="button" aria-label="Đóng">×</button></div>
-      <div class="db">
-        <div class="cvstage">${inf.kind === 'video' ? `<video src="${esc(clipUrl(f))}" controls autoplay loop playsinline ${P.options.muteClips ? 'muted' : ''}></video>` : `<img src="${esc(clipUrl(f))}" alt="">`}</div>
-        <div class="cvmeta"><b title="${esc(P.clipNames[f] || f)}">${esc(P.clipNames[f] || f)}</b><small>${inf.kind === 'video' ? `${(inf.dur || 0).toFixed(1)}s${inf.audio ? (P.options.muteClips ? ' · 🔇 đang tắt tiếng clip' : ' · 🔊 có tiếng') : ''}` : 'ảnh tĩnh'}${inf.energy ? ` · sôi động ${inf.energy}/5` : ''}</small></div>
-        ${o.text ? `<p class="ptext">🎵 ${esc(o.text)}</p>` : ''}
-        ${inf.desc ? `<p class="hint" style="margin:0">🤖 ${esc(inf.desc)}</p>` : ''}
-        ${o.remove ? '<div class="btns"><button class="btn sm danger" id="cvRemove" type="button">Bỏ clip phụ này khỏi câu</button></div>' : ''}
-      </div></div>`;
-    m.hidden = false;
-    $('#cvClose').onclick = close;
-    m.onclick = (e) => e.target === m && close();
-    document.addEventListener('keydown', onKey);
-    if ($('#cvRemove')) $('#cvRemove').onclick = () => (close(), o.remove());
   }
 
   /**
@@ -1260,7 +1211,6 @@ ${BUMPERS.map(([k, n, where]) => `
     }
     const timed = P.lines.filter((l) => l.start !== null).length;
     const fixCount = findLyricFixes().reduce((a, f) => a + f.n, 0);
-    const pickBtn = (cur, empty, id = '') => `<button type="button" class="mpick" ${id ? `id="${id}"` : ''} title="Bấm để xem và chọn clip">${cur ? `<img src="${esc(thumbUrl(cur))}">` : '<i></i>'}<span>${cur ? `Clip ${clipNo(cur)}` : empty}</span><b>▾</b></button>`;
     tools.innerHTML = `<div class="mtools" style="margin-top:12px">
       <button class="btn primary" id="mAiTx" type="button" ${P.songUrl && (!ai || ai.kind === 'transcribe') ? '' : 'disabled'} title="Nghe lại bài hát, chép lại lời + chấm nhịp (thay toàn bộ bảng)">${ai?.kind === 'transcribe' ? '⏹ Dừng AI' : '🤖 AI nghe lại lời'}</button>
       <button class="btn" id="mAiAlign" type="button" ${P.songUrl && (!ai || ai.kind === 'align') ? '' : 'disabled'} title="Giữ chữ trong bảng (đã sửa tay), AI chỉ chấm lại thời gian">${ai?.kind === 'align' ? '⏹ Dừng AI' : '⏱ AI chấm lại thời gian'}</button>
@@ -1274,7 +1224,7 @@ ${BUMPERS.map(([k, n, where]) => `
       <button class="btn ghost danger" id="mClearT" type="button" title="Xoá hết thời gian đã chấm">⟲ Xoá thời gian</button>
     </div>
     <div class="mrow mintro"><span class="mn">♪</span><span></span><span class="mt muted">0:00.00</span><span class="mtx muted">Nhạc dạo (trước câu 1)</span>
-      <span class="mimg">${pickBtn(P.introClip, '— như câu 1 —', 'mIntroClip')}</span><span></span><span></span></div>`;
+      <span class="mimg">${pickBtn(P.introClip, '— như câu 1 —', 'mIntroClip')}</span><span></span></div>`;
     $('#mTapBtn').onclick = () => (tap ? stopTap() : startTap());
     $('#mAiAlign').onclick = aiAlign;
     if ($('#mFixLyr'))
@@ -1314,14 +1264,16 @@ ${BUMPERS.map(([k, n, where]) => `
         <input class="mt" type="text" value="${fmtT(l.start)}" placeholder="--:--" title="Bắt đầu (phút:giây)">
         <input class="mtx" type="text" value="${esc(l.text)}">
         <span class="mimg">${pickBtn(l.clip, '— giữ clip trước —')}</span>
-        <span class="malts" title="Clip phụ: nối tiếp khi câu dài hơn clip chính">${(l.alts || []).map((f) => `<button type="button" class="alt" data-alt="${esc(f)}" title="Bấm để xem clip phụ"><img src="${esc(thumbUrl(f))}"><b>${clipNo(f)}</b></button>`).join('')}${l.clip && P.clips.length > 1 && (l.alts || []).length < 3 ? `<button type="button" class="madd" title="Thêm clip phụ">＋</button>` : ''}</span>
         <button class="ib mdel" type="button" title="Xoá câu">×</button>
       </div>`,
       )
-      .join('') + `<button class="btn ghost sm maddline" id="mAddLine" type="button" ${ai ? 'disabled' : ''}>＋ Thêm câu (AI bỏ sót)</button>`;
+      .join('') +
+      outroRow() +
+      `<button class="btn ghost sm maddline" id="mAddLine" type="button" ${ai ? 'disabled' : ''}>＋ Thêm câu (AI bỏ sót)</button>`;
     playIcons();
     $('#mAddLine').onclick = addLine;
-    $$('.mrow', rows).forEach((r) => {
+    bindOutro();
+    $$('.mrow[data-i]', rows).forEach((r) => {
       const i = Number(r.dataset.i);
       const l = P.lines[i];
       $('.mplay', r).onclick = () => {
@@ -1350,40 +1302,11 @@ ${BUMPERS.map(([k, n, where]) => `
           empty: 'Giữ clip trước',
           onPick: (f) => {
             l.clip = f;
-            l.alts = (l.alts || []).filter((x) => x !== l.clip);
             drawLines();
             drawThumbs();
             save();
           },
         });
-      $$('.alt', r).forEach((b) =>
-        b.addEventListener('click', () =>
-          viewClip(b.dataset.alt, {
-            label: `Câu ${i + 1} · clip phụ`,
-            text: l.text,
-            remove: () => {
-              l.alts = l.alts.filter((f) => f !== b.dataset.alt);
-              drawLines();
-              drawThumbs();
-              save();
-            },
-          }),
-        ),
-      );
-      const add = $('.madd', r);
-      if (add)
-        add.onclick = () =>
-          pickClip({
-            title: `Thêm clip phụ cho câu ${i + 1}`,
-            text: l.text,
-            exclude: [l.clip, ...(l.alts || [])],
-            onPick: (f) => {
-              l.alts = [...(l.alts || []), f];
-              drawLines();
-              drawThumbs();
-              save();
-            },
-          });
       $('.mdel', r).onclick = () => {
         P.lines.splice(i, 1);
         drawLines();
@@ -1405,6 +1328,39 @@ ${BUMPERS.map(([k, n, where]) => `
     au.play();
     playIcons();
   }
+  /** Nhạc dạo cuối: từ hết câu cuối tới hết bài hát (clip riêng, mặc định như câu cuối). */
+  function outroStart() {
+    const l = P.lines[P.lines.length - 1];
+    if (!l || l.start === null) return null;
+    return l.end ?? l.start + Math.max(2.5, l.text.split(/\s+/).length * 0.75 + 1);
+  }
+  function outroRow() {
+    const a = outroStart();
+    const T = P.songDuration || 0;
+    const len = a === null || !T ? null : T - a;
+    const label = len === null ? 'Nhạc dạo cuối (sau câu cuối)' : len >= 1 ? `Nhạc dạo cuối (${len.toFixed(1)}s, tới hết bài)` : 'Nhạc dạo cuối — bài hết ngay sau câu cuối';
+    return `<div class="mrow mintro moutro"><span class="mn">♪</span>
+      <button class="ib mplay" type="button" data-play="outro" ${len >= 1 ? '' : 'disabled'}>▶</button>
+      <span class="mt muted">${a === null ? '--:--' : fmtT(a)}</span><span class="mtx muted">${label}</span>
+      <span class="mimg">${pickBtn(P.outroClip, '— như câu cuối —', 'mOutroClip')}</span><span></span></div>`;
+  }
+  function bindOutro() {
+    const b = $('#mOutroClip');
+    if (!b) return;
+    $('.moutro .mplay').onclick = () => playFrom(Math.max(0, outroStart() - 0.3), 'outro', P.songDuration);
+    b.onclick = () =>
+      pickClip({
+        title: 'Clip cho nhạc dạo cuối',
+        cur: P.outroClip,
+        empty: 'Như câu cuối',
+        onPick: (f) => {
+          P.outroClip = f;
+          drawLines();
+          drawThumbs();
+          save();
+        },
+      });
+  }
   /** Nút ▶ của đoạn / câu đang nghe đổi thành ⏹. */
   function playIcons() {
     const au = $('#mAudio');
@@ -1412,7 +1368,7 @@ ${BUMPERS.map(([k, n, where]) => `
     $$('[data-play]').forEach((b) => {
       b.textContent = b.dataset.play === on ? '⏹' : '▶';
       b.classList.toggle('on', b.dataset.play === on);
-      b.title = b.dataset.play === on ? 'Dừng' : b.dataset.play[0] === 's' ? 'Nghe đoạn này' : 'Nghe câu này';
+      b.title = b.dataset.play === on ? 'Dừng' : b.dataset.play[0] === 's' || b.dataset.play === 'outro' ? 'Nghe đoạn này' : 'Nghe câu này';
     });
   }
 
@@ -1560,6 +1516,11 @@ ${BUMPERS.map(([k, n, where]) => `
     if (logo === null) {
       toast('Chưa có logo kênh. Hãy tải logo (mục 3) trước khi dựng.', 'err');
       return $('#mLogoDrop')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (!P.introTitle?.trim()) {
+      toast('Chưa nhập tên bài hiện lúc nhạc dạo (mục 8 Hình & chữ) — ô này bắt buộc.', 'err');
+      $('#mIntroTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return $('#mIntroTitle').focus();
     }
     const untimed = P.lines.filter((l) => l.start === null).length;
     if (P.options.captions.on && untimed && !confirm(`${untimed}/${P.lines.length} câu chưa chấm nhịp — app sẽ chia đều thời gian nên lời có thể lệch giọng hát. Vẫn dựng?`)) return;
